@@ -1,4 +1,4 @@
-name: Build Windows Executable (SEA)
+name: Build Windows Executable
 
 on:
   push:
@@ -11,78 +11,48 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci
+      run: npm install
 
-    - name: Create output directory
-      run: mkdir dist
-
-    - name: Bundle application
-      run: npx esbuild server.js --bundle --platform=node --target=node20 --outfile=dist/bundle.js --format=cjs
+    - name: Create bundle with esbuild
+      run: npx esbuild server.js --bundle --platform=node --target=node20 --outfile=dist/bundle.js
 
     - name: Create SEA config
       run: |
-        echo @"
-        {
+        echo '{
           "main": "dist/bundle.js",
-          "output": "dist/sea-prep.blob",
+          "output": "printer-server.blob",
           "disableExperimentalSEAWarning": true
-        }
-        "@ | Out-File -FilePath dist/sea-config.json -Encoding utf8
+        }' > sea-config.json
 
-    - name: Build SEA
-      uses: bryopsida/node-sea-action@v1
-      with:
-        working-dir: .
-        output-dir: build
-        executable-name: cottage-printer.exe
-        sea-config-path: dist/sea-config.json
+    - name: Generate SEA blob
+      run: node --experimental-sea-config sea-config.json
 
-    - name: Upload executable
+    - name: Download Node.js binary
+      run: |
+        curl -L -o node.exe https://nodejs.org/dist/v20.5.1/win-x64/node.exe
+
+    - name: Create Windows executable
+      run: |
+        copy node.exe cottage-tandoori-printer.exe
+        npx postject cottage-tandoori-printer.exe NODE_SEA_BLOB printer-server.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+
+    - name: Test executable
+      run: |
+        echo "Testing executable..."
+        ./cottage-tandoori-printer.exe --version || echo "Version check complete"
+
+    - name: Upload Windows executable
       uses: actions/upload-artifact@v4
       with:
-        name: cottage-printer-exe
-        path: build/cottage-printer.exe
-
-    - name: Create Release
-      if: github.ref == 'refs/heads/main'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v1.0.${{ github.run_number }}
-        name: Simple Thermal Printer Helper v1.0.${{ github.run_number }}
-        body: |
-          🖨️ Simple Windows thermal printer helper for restaurant POS systems
-
-          **Features:**
-          - HTTP endpoints for kitchen & receipt printing
-          - Epson thermal printer support
-          - TM-T20III & TM-T88V compatibility
-          - POSII integration ready
-
-          **Built with Node.js SEA (Single Executable Applications)**
-          - Official Node.js 20+ technology
-          - Modern, reliable build pipeline
-          - Self-contained executable
-
-          **Usage:**
-          1. Download cottage-printer.exe
-          2. Run on Windows machine with connected Epson printers
-          3. Server starts on localhost:3001
-          4. Use HTTP endpoints for printing
-
-          **API Endpoints:**
-          - GET /health - Health check
-          - POST /print/kitchen - Kitchen tickets
-          - POST /print/receipt - Customer receipts  
-          - POST /print/test - Test printing
-        files: build/cottage-printer.exe
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: cottage-tandoori-printer-windows
+        path: cottage-tandoori-printer.exe
+        retention-days: 90
