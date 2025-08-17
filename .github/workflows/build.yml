@@ -1,13 +1,11 @@
-name: Build Windows Executable
+name: Dependency Diagnostic
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
-  build:
+  debug-dependencies:
     runs-on: windows-latest
 
     steps:
@@ -19,40 +17,28 @@ jobs:
       with:
         node-version: '20'
 
-    - name: Install dependencies
-      run: npm install
-
-    - name: Create bundle with esbuild
-      run: npx esbuild server.js --bundle --platform=node --target=node20 --outfile=dist/bundle.js
-
-    - name: Create SEA config
+    - name: Show environment info
       run: |
-        echo '{
-          "main": "dist/bundle.js",
-          "output": "printer-server.blob",
-          "disableExperimentalSEAWarning": true
-        }' > sea-config.json
+        echo "Node version:"
+        node --version
+        echo "NPM version:"
+        npm --version
+        echo "Package.json contents:"
+        type package.json
 
-    - name: Generate SEA blob
-      run: node --experimental-sea-config sea-config.json
+    - name: Install dependencies with verbose logging
+      run: npm install --verbose
 
-    - name: Download Node.js binary
+    - name: List installed packages
       run: |
-        curl -L -o node.exe https://nodejs.org/dist/v20.5.1/win-x64/node.exe
+        echo "node_modules structure:"
+        dir node_modules
+        echo "Checking for express:"
+        dir node_modules\express || echo "Express not found"
+        echo "Checking for cors:"
+        dir node_modules\cors || echo "CORS not found"
 
-    - name: Create Windows executable
+    - name: Test simple require
       run: |
-        copy node.exe cottage-tandoori-printer.exe
-        npx postject cottage-tandoori-printer.exe NODE_SEA_BLOB printer-server.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
-
-    - name: Test executable
-      run: |
-        echo "Testing executable..."
-        ./cottage-tandoori-printer.exe --version || echo "Version check complete"
-
-    - name: Upload Windows executable
-      uses: actions/upload-artifact@v4
-      with:
-        name: cottage-tandoori-printer-windows
-        path: cottage-tandoori-printer.exe
-        retention-days: 90
+        echo "Testing require statements..."
+        node -e "console.log('Express:', require('express')); console.log('CORS:', require('cors')); console.log('SUCCESS: All dependencies loaded');"
