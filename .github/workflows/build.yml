@@ -2,171 +2,65 @@ name: Build Raw ESC/POS Printer Helper
 
 on:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  workflow_dispatch:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-raw-escpos:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: windows-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js 20
+    - name: Setup Node.js 18
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'npm'
+        node-version: '18'
 
     - name: Install dependencies
       run: npm install
 
-    - name: Install pkg globally
-      run: npm install -g pkg
-
     - name: Build Raw ESC/POS executables
-      run: |
-        mkdir -p dist
-
-        echo "🖨️ Building Raw ESC/POS Printer Helper v2.0.0"
-        echo "⚡ No thermal libraries - Direct ESC/POS commands"
-
-        # Build PKG executables
-        pkg . --targets node20-macos-x64 --output dist/printer-helper-macos
-        pkg . --targets node20-win-x64 --output dist/printer-helper-win.exe
-        pkg . --targets node20-linux-x64 --output dist/printer-helper-linux
-
-        # Make executables executable
-        chmod +x dist/printer-helper-macos
-        chmod +x dist/printer-helper-linux
-
-        echo "✅ Built Raw ESC/POS executables"
-        ls -la dist/
+      run: npm run build
 
     - name: Create setup guide
       run: |
-        cat > dist/RAW-ESCPOS-SETUP.md << 'EOF'
-        # Raw ESC/POS Printer Helper v2.0.0 - Setup Guide
-
-        Direct thermal printing - No libraries, maximum reliability!
-
-        ## What is New in v2.0.0
-
-        - Removed all thermal libraries (node-thermal-printer completely removed)
-        - Raw ESC/POS commands sent directly to printer hardware
-        - Windows PowerShell integration for reliable USB communication
-        - Cross-platform file fallback method
-        - Proper thermal formatting (bold, alignment, cuts)
-
-        ## Download and Install
-
-        ### Windows (Recommended Platform)
-        1. Download: printer-helper-win.exe
-        2. Double-click to run
-        3. Connect EPSON TM-T20III via USB
-        4. Test: Open browser to http://localhost:3001
-
-        ### macOS
-        1. Download: printer-helper-macos
-        2. Terminal: chmod +x printer-helper-macos && ./printer-helper-macos
-
-        ### Linux
-        1. Download: printer-helper-linux
-        2. Terminal: chmod +x printer-helper-linux && ./printer-helper-linux
-
-        ## How Raw ESC/POS Works
-
-        Traditional Method (FAILING):
-        App → Thermal Library → Printer Driver → Printer
-
-        New Raw Method (RELIABLE):
-        App → Raw ESC/POS Commands → Direct USB → Printer
-
-        ## Test Your Setup
-
-        1. Start Helper: Run downloaded executable
-        2. Check Status: http://localhost:3001/health
-        3. Test Print: http://localhost:3001/test-print (POST request)
-        4. Verify Output: Should print formatted test receipt with cut
-
-        ## Expected Output
-
-        TEST PRINT
-        Printer: EPSON TM-T20III
-        Time: [current time]
-        Status: Raw ESC/POS Commands
-        SUCCESS!
-        Direct printer communication
-        No thermal libraries needed
-        [PAPER CUT]
-
-        ## Troubleshooting
-
-        Success Indicators:
-        - Helper starts on port 3001
-        - /health returns "raw_escpos": true
-        - Test print cuts paper cleanly
-        - Bold text appears properly
-
-        Common Issues:
-        - No printer found: Check USB connection, verify TM-T20III driver
-        - Print garbled: Ensure 80mm paper, check character encoding
-        - No paper cut: Verify ESC/POS commands, try different USB port
-        - Port 3001 busy: Kill existing processes, restart computer
-
-        Advanced Debugging:
-        - Run executable from terminal to see debug output
-        - Check Windows Device Manager for printer status
-        - Verify printer appears in "Devices and Printers"
-
-        Raw ESC/POS v2.0.0 - Maximum Reliability Edition
-        EOF
+        echo "# Cottage Tandoori Printer Helper Setup" > setup-guide.md
+        echo "" >> setup-guide.md
+        echo "## Installation" >> setup-guide.md
+        echo "1. Download cottage-tandoori-printer.exe" >> setup-guide.md
+        echo "2. Run the executable" >> setup-guide.md
+        echo "3. Test with http://localhost:3001/health" >> setup-guide.md
+        echo "" >> setup-guide.md
+        echo "## Troubleshooting" >> setup-guide.md
+        echo "- Ensure Windows firewall allows port 3001" >> setup-guide.md
+        echo "- Check thermal printer is connected and powered" >> setup-guide.md
+        echo "- Verify printer drivers are installed" >> setup-guide.md
 
     - name: Verify executables
       run: |
-        echo "📁 Raw ESC/POS build contents:"
-        ls -la dist/
-
-        echo "🔍 Testing executables:"
-        file dist/printer-helper-*
-
-        echo "✅ Raw ESC/POS v2.0.0 ready for release!"
+        if (Test-Path "cottage-tandoori-printer.exe") {
+          Write-Host "✅ cottage-tandoori-printer.exe created successfully"
+          $size = (Get-Item "cottage-tandoori-printer.exe").Length
+          Write-Host "File size: $($size / 1MB) MB"
+        } else {
+          Write-Host "❌ cottage-tandoori-printer.exe not found"
+          exit 1
+        }
+      shell: pwsh
 
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v1
+      if: github.ref == 'refs/heads/main'
       with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: "Cottage Tandoori Printer Helper v1.0.${{ github.run_number }}"
         files: |
-          dist/printer-helper-macos
-          dist/printer-helper-win.exe
-          dist/printer-helper-linux
-          dist/RAW-ESCPOS-SETUP.md
+          cottage-tandoori-printer.exe
+          setup-guide.md
         draft: false
         prerelease: false
-        body: |
-          Raw ESC/POS Thermal Printer Helper v2.0.0
-
-          Maximum Reliability Release - No Thermal Libraries!
-
-          What is New:
-          - Removed node-thermal-printer (source of failures)
-          - Raw ESC/POS commands sent directly to hardware
-          - Windows PowerShell integration for USB communication
-          - Proper thermal formatting (bold, center, cuts)
-          - Cross-platform fallback via file transfer method
-
-          Downloads:
-          - Windows: printer-helper-win.exe (Recommended)
-          - macOS: printer-helper-macos
-          - Linux: printer-helper-linux
-          - Setup Guide: RAW-ESCPOS-SETUP.md
-
-          Quick Test:
-          1. Run executable → Server starts on port 3001
-          2. POST to /test-print → Should print formatted receipt with cut
-          3. Verify: Bold text, centered header, clean paper cut
-
-          For TM-T20III users: This version bypasses all problematic thermal libraries and communicates directly with your printer hardware.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
