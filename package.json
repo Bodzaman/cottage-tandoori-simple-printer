@@ -1,27 +1,32 @@
 {
-  "name": "cottage-tandoori-simple-printer",
-  "version": "1.0.0",
-  "description": "Simple Node.js HTTP server for thermal printing - POSII integration ready",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "build": "pkg server.js --target node18-win-x64 --output cottage-tandoori-printer.exe",
-    "test": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-thermal-printer": "^4.4.6"
-  },
-  "devDependencies": {
-    "pkg": "^5.8.1"
+  "name": "cottage-tandoori-raw-printer",
+  "version": "2.0.0",
+  "description": "Raw ESC/POS Thermal Printer - No thermal libraries, direct printer communication",
+  "main": "index.js",
+  "bin": {
+    "printer-helper": "./index.js"
   },
   "pkg": {
     "assets": [],
-    "scripts": ["server.js"],
-    "targets": ["node18-win-x64"]
+    "targets": [
+      "node20-macos-x64",
+      "node20-win-x64",
+      "node20-linux-x64"
+    ],
+    "outputPath": "dist"
   },
-  "keywords": ["thermal-printer", "pos", "restaurant", "epson", "http-server"],
+  "scripts": {
+    "start": "node index.js",
+    "build": "pkg package.json",
+    "test": "node index.js --test"
+  },
   "author": "Cottage Tandoori",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
 }
