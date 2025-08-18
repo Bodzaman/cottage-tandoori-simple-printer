@@ -5,11 +5,11 @@ const os = require('os');
 const app = express();
 const PORT = 3001;
 
-// Basic middleware
+// Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
@@ -20,13 +20,12 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Kitchen printer endpoint
+// Kitchen printer
 app.post('/print/kitchen', (req, res) => {
     try {
         const orderData = req.body;
         console.log('Kitchen print request:', JSON.stringify(orderData, null, 2));
 
-        // Basic validation
         if (!orderData.items || !Array.isArray(orderData.items)) {
             return res.status(400).json({ 
                 success: false, 
@@ -34,7 +33,6 @@ app.post('/print/kitchen', (req, res) => {
             });
         }
 
-        // Simulate printing process
         console.log('Printing to kitchen (TM-T20III)...');
 
         res.json({
@@ -54,13 +52,12 @@ app.post('/print/kitchen', (req, res) => {
     }
 });
 
-// Receipt printer endpoint
+// Receipt printer
 app.post('/print/receipt', (req, res) => {
     try {
         const receiptData = req.body;
         console.log('Receipt print request:', JSON.stringify(receiptData, null, 2));
 
-        // Basic validation
         if (!receiptData.total) {
             return res.status(400).json({ 
                 success: false, 
@@ -68,7 +65,6 @@ app.post('/print/receipt', (req, res) => {
             });
         }
 
-        // Simulate printing process
         console.log('Printing receipt (TM-T88V)...');
 
         res.json({
@@ -88,11 +84,11 @@ app.post('/print/receipt', (req, res) => {
     }
 });
 
-// Test print endpoint
+// Test printer
 app.post('/print/test', (req, res) => {
     try {
         const printerType = req.body.printer || 'both';
-        console.log(`Test print request for: ${printerType}`);
+        console.log('Test print request for:', printerType);
 
         const testResults = {
             timestamp: new Date().toISOString(),
@@ -132,7 +128,7 @@ app.post('/print/test', (req, res) => {
     }
 });
 
-// Error handling middleware
+// Error handling
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
     res.status(500).json({
@@ -143,18 +139,18 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, '127.0.0.1', () => {
-    console.log(`=================================`);
-    console.log(`🖨️  Cottage Tandoori Printer Service`);
-    console.log(`🚀 Server running on http://127.0.0.1:${PORT}`);
-    console.log(`📡 Endpoints available:`);
-    console.log(`   GET  /health - Health check`);
-    console.log(`   POST /print/kitchen - Kitchen printing`);
-    console.log(`   POST /print/receipt - Receipt printing`);
-    console.log(`   POST /print/test - Test printing`);
-    console.log(`=================================`);
+    console.log('=================================');
+    console.log('🖨️  Cottage Tandoori Printer Service');
+    console.log('🚀 Server running on http://127.0.0.1:' + PORT);
+    console.log('📡 Endpoints available:');
+    console.log('   GET  /health - Health check');
+    console.log('   POST /print/kitchen - Kitchen printing');
+    console.log('   POST /print/receipt - Receipt printing');
+    console.log('   POST /print/test - Test printing');
+    console.log('=================================');
 });
 
-// Handle graceful shutdown
+// Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down printer service...');
     process.exit(0);
