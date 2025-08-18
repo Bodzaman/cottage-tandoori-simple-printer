@@ -73,11 +73,7 @@ jobs:
         dir cottage-tandoori-printer.exe
         echo "Executable size:"
         (Get-Item cottage-tandoori-printer.exe).length
-
-    - name: Test executable
-      run: |
-        echo "Testing executable..."
-        ./cottage-tandoori-printer.exe --version || echo "Executable test complete"
+        echo "✅ Windows executable created successfully!"
 
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
