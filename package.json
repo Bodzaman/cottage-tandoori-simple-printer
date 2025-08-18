@@ -1,7 +1,7 @@
 {
-  "name": "cottage-tandoori-simple-printer",
-  "version": "1.0.0",
-  "description": "Simple Node.js HTTP server for thermal printing - POSII integration ready",
+  "name": "cottage-tandoori-windows-printer",
+  "version": "2.0.0",
+  "description": "Windows-first printer helper - leverages Windows print spooler",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,8 +10,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-thermal-printer": "^4.4.6"
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "pkg": "^5.8.1"
@@ -21,7 +20,7 @@
     "scripts": ["server.js"],
     "targets": ["node18-win-x64"]
   },
-  "keywords": ["thermal-printer", "pos", "restaurant", "epson", "http-server"],
+  "keywords": ["windows-printer", "pos", "restaurant", "thermal", "http-server"],
   "author": "Cottage Tandoori",
   "license": "MIT"
 }
