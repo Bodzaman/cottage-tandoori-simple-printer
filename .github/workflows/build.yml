@@ -36,3 +36,10 @@ jobs:
           exit 1
         }
       shell: pwsh
+
+    - name: Upload executable as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: cottage-tandoori-printer
+        path: cottage-tandoori-printer.exe
+        retention-days: 30
