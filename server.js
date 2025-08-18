@@ -1,343 +1,274 @@
 const express = require('express');
 const cors = require('cors');
-const os = require('os');
 const { exec } = require('child_process');
-const { ThermalPrinter, PrinterTypes } = require('node-thermal-printer');
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = 3001;
 
-// Printer configuration
-const KITCHEN_PRINTER_NAME = "EPSON TM-T20III Receipt";
-
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 
-// Initialize thermal printer
-function initializePrinter() {
-    try {
-        const printer = new ThermalPrinter({
-            type: PrinterTypes.EPSON,
-            interface: 'printer:' + KITCHEN_PRINTER_NAME,
-            options: {
-                timeout: 5000
-            }
-        });
-        return printer;
-    } catch (error) {
-        console.error('Printer initialization error:', error.message);
-        return null;
-    }
-}
+console.log('🖨️  Cottage Tandoori Windows Printer Helper v2.0.0');
+console.log('🔧 Using Windows print spooler (no thermal drivers needed)');
+console.log(`🚀 Server starting on port ${PORT}...`);
 
-// Format kitchen ticket
-function formatKitchenTicket(orderData) {
-    const printer = initializePrinter();
-    if (!printer) {
-        throw new Error('Failed to initialize printer');
-    }
-
-    try {
-        // Header
-        printer.alignCenter();
-        printer.setTextSize(1, 1);
-        printer.bold(true);
-        printer.println("COTTAGE TANDOORI");
-        printer.println("KITCHEN ORDER");
-        printer.bold(false);
-        printer.drawLine();
-
-        // Order details
-        printer.alignLeft();
-        printer.setTextNormal();
-        printer.println(`Order: ${orderData.orderNumber || 'N/A'}`);
-        printer.println(`Type: ${orderData.orderType || 'DINE-IN'}`);
-        printer.println(`Time: ${new Date().toLocaleTimeString()}`);
-
-        if (orderData.table) {
-            printer.println(`Table: ${orderData.table}`);
-        }
-
-        printer.drawLine();
-
-        // Items
-        printer.bold(true);
-        printer.println("ITEMS:");
-        printer.bold(false);
-
-        if (orderData.items && Array.isArray(orderData.items)) {
-            orderData.items.forEach((item, index) => {
-                printer.println(`${index + 1}. ${item.name}`);
-                if (item.quantity > 1) {
-                    printer.println(`   Qty: ${item.quantity}`);
-                }
-                if (item.modifiers && item.modifiers.length > 0) {
-                    item.modifiers.forEach(mod => {
-                        printer.println(`   * ${mod}`);
-                    });
-                }
-                if (item.notes) {
-                    printer.println(`   Notes: ${item.notes}`);
-                }
-                printer.println('');
-            });
-        }
-
-        // Special instructions
-        if (orderData.specialInstructions) {
-            printer.drawLine();
-            printer.bold(true);
-            printer.println("SPECIAL INSTRUCTIONS:");
-            printer.bold(false);
-            printer.println(orderData.specialInstructions);
-        }
-
-        // Footer
-        printer.drawLine();
-        printer.alignCenter();
-        printer.println("*** KITCHEN COPY ***");
-        printer.cut();
-
-        return printer;
-    } catch (error) {
-        console.error('Error formatting kitchen ticket:', error.message);
-        throw error;
-    }
-}
-
-// Windows printer fallback
-function printToWindowsPrinter(content, printerName) {
-    return new Promise((resolve, reject) => {
-        // Create a simple text file for printing
-        const printContent = `
-COTTAGE TANDOORI - KITCHEN ORDER
-================================
-${content}
-================================
-*** KITCHEN COPY ***
-        `;
-
-        // Use Windows print command
-        const command = `echo "${printContent.replace(/"/g, '\"')}" | print /D:"${printerName}"`;
-
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error('Windows print error:', error.message);
-                reject(error);
-            } else {
-                console.log('Windows print success:', stdout);
-                resolve(stdout);
-            }
-        });
-    });
-}
-
-// Health check
+// Health check endpoint
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         platform: os.platform(),
-        nodeVersion: process.version,
-        port: PORT,
-        printerName: KITCHEN_PRINTER_NAME
+        version: '2.0.0',
+        method: 'Windows Print Spooler',
+        printer: 'EPSON TM-T20III'
     });
 });
 
-// Kitchen printer
-app.post('/print/kitchen', async (req, res) => {
-    try {
-        const orderData = req.body;
-        console.log('Kitchen print request:', JSON.stringify(orderData, null, 2));
+// Helper function to create print-ready text for thermal receipt
+function formatReceipt(data, type = 'receipt') {
+    let receipt = '';
 
-        if (!orderData.items || !Array.isArray(orderData.items)) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid order data: items array required' 
+    if (type === 'kitchen') {
+        receipt += 'COTTAGE TANDOORI - KITCHEN\n';
+        receipt += '================================\n';
+        receipt += `Order #${data.orderNumber || 'N/A'}\n`;
+        receipt += `Table: ${data.table || 'Takeaway'}\n`;
+        receipt += `Time: ${new Date().toLocaleString()}\n`;
+        receipt += '--------------------------------\n';
+
+        if (data.items && Array.isArray(data.items)) {
+            data.items.forEach(item => {
+                receipt += `${item.quantity || 1}x ${item.name || 'Item'}\n`;
+                if (item.modifiers && item.modifiers.length > 0) {
+                    item.modifiers.forEach(mod => {
+                        receipt += `  + ${mod}\n`;
+                    });
+                }
+                if (item.specialInstructions) {
+                    receipt += `  NOTE: ${item.specialInstructions}\n`;
+                }
+                receipt += '\n';
             });
         }
 
-        console.log(`Printing to kitchen printer: ${KITCHEN_PRINTER_NAME}...`);
+        receipt += '--------------------------------\n';
+        receipt += 'Special Instructions:\n';
+        receipt += `${data.notes || data.specialInstructions || 'None'}\n`;
+        receipt += '================================\n';
 
-        try {
-            // Try thermal printer first
-            const printer = formatKitchenTicket(orderData);
-            const isConnected = await printer.isPrinterConnected();
+    } else {
+        // Customer receipt
+        receipt += 'COTTAGE TANDOORI\n';
+        receipt += '123 Restaurant Street\n';
+        receipt += 'Phone: (555) 123-4567\n';
+        receipt += '================================\n';
+        receipt += `Order #${data.orderNumber || 'N/A'}\n`;
+        receipt += `${new Date().toLocaleString()}\n`;
+        receipt += '--------------------------------\n';
 
-            if (isConnected) {
-                await printer.execute();
-                console.log('✅ Thermal print successful');
+        if (data.items && Array.isArray(data.items)) {
+            let subtotal = 0;
+            data.items.forEach(item => {
+                const price = parseFloat(item.price || 0);
+                const quantity = parseInt(item.quantity || 1);
+                const itemTotal = price * quantity;
+                subtotal += itemTotal;
 
-                res.json({
-                    success: true,
-                    message: 'Kitchen ticket printed successfully via thermal printer',
-                    printer: KITCHEN_PRINTER_NAME,
-                    method: 'thermal',
-                    timestamp: new Date().toISOString(),
-                    itemCount: orderData.items.length
+                receipt += `${quantity}x ${item.name || 'Item'}`;
+                receipt += ` £${itemTotal.toFixed(2)}\n`;
+            });
+
+            receipt += '--------------------------------\n';
+            receipt += `Subtotal: £${subtotal.toFixed(2)}\n`;
+            if (data.tax) {
+                receipt += `Tax: £${parseFloat(data.tax).toFixed(2)}\n`;
+            }
+            if (data.deliveryFee) {
+                receipt += `Delivery: £${parseFloat(data.deliveryFee).toFixed(2)}\n`;
+            }
+
+            const total = subtotal + parseFloat(data.tax || 0) + parseFloat(data.deliveryFee || 0);
+            receipt += `TOTAL: £${total.toFixed(2)}\n`;
+        }
+
+        receipt += '================================\n';
+        receipt += 'Thank you for your order!\n';
+        receipt += 'Visit us again soon!\n';
+    }
+
+    return receipt;
+}
+
+// Helper function to print using Windows print spooler
+function printToWindows(content, callback) {
+    const tempFile = path.join(os.tmpdir(), `receipt_${Date.now()}.txt`);
+
+    try {
+        // Write content to temp file
+        fs.writeFileSync(tempFile, content, 'utf8');
+
+        // Use PowerShell to send to printer via Windows spooler
+        const printCmd = `powershell -Command "try { Get-Content '${tempFile}' | Out-Printer -Name 'EPSON TM-T20III'; Write-Output 'SUCCESS' } catch { Write-Output 'ERROR: ' + $_.Exception.Message }"`;
+
+        exec(printCmd, (error, stdout, stderr) => {
+            // Clean up temp file
+            try {
+                fs.unlinkSync(tempFile);
+            } catch (e) {
+                console.log('Could not delete temp file:', e.message);
+            }
+
+            if (error) {
+                console.error('❌ Print command error:', error.message);
+                callback(error, null);
+            } else if (stdout.includes('ERROR:')) {
+                const errorMsg = stdout.replace('ERROR: ', '').trim();
+                console.error('❌ PowerShell print error:', errorMsg);
+                callback(new Error(errorMsg), null);
+            } else {
+                console.log('✅ Print sent to Windows spooler successfully');
+                callback(null, 'Print job sent to EPSON TM-T20III');
+            }
+        });
+
+    } catch (writeError) {
+        console.error('❌ File write error:', writeError.message);
+        callback(writeError, null);
+    }
+}
+
+// Kitchen ticket endpoint
+app.post('/print/kitchen', (req, res) => {
+    console.log('📝 Kitchen ticket print request received');
+    console.log('Request data:', JSON.stringify(req.body, null, 2));
+
+    try {
+        const receiptText = formatReceipt(req.body, 'kitchen');
+        console.log('📄 Formatted kitchen ticket:', receiptText);
+
+        printToWindows(receiptText, (error, result) => {
+            if (error) {
+                console.error('❌ Kitchen print failed:', error.message);
+                res.status(500).json({
+                    success: false,
+                    message: 'Kitchen print failed',
+                    error: error.message,
+                    method: 'Windows Print Spooler'
                 });
             } else {
-                throw new Error('Thermal printer not connected');
-            }
-        } catch (thermalError) {
-            console.log('Thermal printer failed, trying Windows print...');
-
-            // Fallback to Windows printer
-            const printContent = orderData.items.map((item, i) => 
-                `${i+1}. ${item.name} ${item.quantity > 1 ? `(x${item.quantity})` : ''}`
-            ).join('\n');
-
-            await printToWindowsPrinter(printContent, KITCHEN_PRINTER_NAME);
-
-            console.log('✅ Windows print successful');
-
-            res.json({
-                success: true,
-                message: 'Kitchen ticket printed successfully via Windows printer',
-                printer: KITCHEN_PRINTER_NAME,
-                method: 'windows',
-                timestamp: new Date().toISOString(),
-                itemCount: orderData.items.length
-            });
-        }
-
-    } catch (error) {
-        console.error('Kitchen print error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            printer: KITCHEN_PRINTER_NAME
-        });
-    }
-});
-
-// Receipt printer (placeholder for future)
-app.post('/print/receipt', (req, res) => {
-    try {
-        const receiptData = req.body;
-        console.log('Receipt print request:', JSON.stringify(receiptData, null, 2));
-
-        if (!receiptData.total) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid receipt data: total required' 
-            });
-        }
-
-        console.log('Receipt printing not yet implemented...');
-
-        res.json({
-            success: true,
-            message: 'Receipt functionality coming soon',
-            printer: 'Future Implementation',
-            timestamp: new Date().toISOString(),
-            total: receiptData.total
-        });
-
-    } catch (error) {
-        console.error('Receipt print error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Test printer
-app.post('/print/test', async (req, res) => {
-    try {
-        const printerType = req.body.printer || 'kitchen';
-        console.log('Test print request for:', printerType);
-
-        if (printerType === 'kitchen' || printerType === 'both') {
-            // Test kitchen printer
-            const testOrder = {
-                orderNumber: 'TEST-001',
-                orderType: 'TEST',
-                items: [
-                    { name: 'Test Item 1', quantity: 1 },
-                    { name: 'Test Item 2', quantity: 2, modifiers: ['Extra Spicy'] }
-                ],
-                specialInstructions: 'This is a test print'
-            };
-
-            try {
-                const printer = formatKitchenTicket(testOrder);
-                const isConnected = await printer.isPrinterConnected();
-
-                if (isConnected) {
-                    await printer.execute();
-
-                    res.json({
-                        success: true,
-                        message: 'Test print successful via thermal printer',
-                        printer: KITCHEN_PRINTER_NAME,
-                        method: 'thermal',
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    throw new Error('Thermal printer not connected');
-                }
-            } catch (thermalError) {
-                // Fallback to Windows printer
-                await printToWindowsPrinter('TEST PRINT - Kitchen Order Test', KITCHEN_PRINTER_NAME);
-
+                console.log('✅ Kitchen ticket printed successfully');
                 res.json({
                     success: true,
-                    message: 'Test print successful via Windows printer',
-                    printer: KITCHEN_PRINTER_NAME,
-                    method: 'windows',
-                    timestamp: new Date().toISOString()
+                    message: 'Kitchen ticket printed successfully',
+                    method: 'Windows Print Spooler',
+                    printer: 'EPSON TM-T20III'
                 });
             }
-        } else {
-            res.json({
-                success: true,
-                message: 'Test completed (no printers specified)',
-                timestamp: new Date().toISOString()
-            });
-        }
+        });
 
     } catch (error) {
-        console.error('Test print error:', error.message);
+        console.error('❌ Kitchen format error:', error.message);
         res.status(500).json({
             success: false,
+            message: 'Failed to format kitchen ticket',
             error: error.message
         });
     }
 });
 
-// Error handling
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error'
+// Customer receipt endpoint
+app.post('/print/receipt', (req, res) => {
+    console.log('🧾 Customer receipt print request received');
+    console.log('Request data:', JSON.stringify(req.body, null, 2));
+
+    try {
+        const receiptText = formatReceipt(req.body, 'receipt');
+        console.log('📄 Formatted customer receipt:', receiptText);
+
+        printToWindows(receiptText, (error, result) => {
+            if (error) {
+                console.error('❌ Receipt print failed:', error.message);
+                res.status(500).json({
+                    success: false,
+                    message: 'Receipt print failed',
+                    error: error.message,
+                    method: 'Windows Print Spooler'
+                });
+            } else {
+                console.log('✅ Customer receipt printed successfully');
+                res.json({
+                    success: true,
+                    message: 'Receipt printed successfully',
+                    method: 'Windows Print Spooler',
+                    printer: 'EPSON TM-T20III'
+                });
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Receipt format error:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to format receipt',
+            error: error.message
+        });
+    }
+});
+
+// Test print endpoint
+app.post('/print/test', (req, res) => {
+    console.log('🧪 Test print request received');
+
+    const testContent = 'COTTAGE TANDOORI - TEST PRINT\n' +
+                       '================================\n' +
+                       'Windows Print Spooler Test\n' +
+                       `Time: ${new Date().toLocaleString()}\n` +
+                       'Printer: EPSON TM-T20III\n' +
+                       'Method: Windows Print Spooler\n' +
+                       'Status: Helper app working!\n' +
+                       '================================\n' +
+                       'If you can read this, the\n' +
+                       'Windows-first approach works!\n';
+
+    printToWindows(testContent, (error, result) => {
+        if (error) {
+            console.error('❌ Test print failed:', error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Test print failed',
+                error: error.message,
+                method: 'Windows Print Spooler'
+            });
+        } else {
+            console.log('✅ Test print sent successfully');
+            res.json({
+                success: true,
+                message: 'Test print sent successfully',
+                method: 'Windows Print Spooler',
+                printer: 'EPSON TM-T20III'
+            });
+        }
     });
 });
 
 // Start server
-app.listen(PORT, '127.0.0.1', () => {
-    console.log('=================================');
-    console.log('🖨️  Cottage Tandoori Printer Service');
-    console.log('🚀 Server running on http://127.0.0.1:' + PORT);
-    console.log(`🖨️  Configured printer: ${KITCHEN_PRINTER_NAME}`);
-    console.log('📡 Endpoints available:');
-    console.log('   GET  /health - Health check');
-    console.log('   POST /print/kitchen - Kitchen printing');
-    console.log('   POST /print/receipt - Receipt printing');
-    console.log('   POST /print/test - Test printing');
-    console.log('=================================');
+app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`🖨️  Ready to print via Windows spooler to EPSON TM-T20III`);
+    console.log(`🧪 Test: POST http://localhost:${PORT}/print/test`);
+    console.log(`📝 Kitchen: POST http://localhost:${PORT}/print/kitchen`);
+    console.log(`🧾 Receipt: POST http://localhost:${PORT}/print/receipt`);
+    console.log(`💡 No thermal drivers needed - leverages Windows print system!`);
 });
 
-// Graceful shutdown
+// Handle graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down printer service...');
+    console.log('\n👋 Shutting down Windows printer helper...');
     process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-    console.log('\n🛑 Shutting down printer service...');
-    process.exit(0);
-});
+module.exports = app;
