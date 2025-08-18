@@ -2,6 +2,8 @@ name: Build Raw ESC/POS Printer Helper
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
