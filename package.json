@@ -1,42 +1,27 @@
 {
-  "name": "cottage-tandoori-windows-printer",
-  "version": "3.0.0",
-  "description": "Windows-first printing helper for Cottage Tandoori - leverages Windows print spooler for reliable thermal printing",
-  "main": "index.js",
-  "bin": {
-    "printer-helper": "./index.js"
-  },
-  "pkg": {
-    "assets": [],
-    "targets": [
-      "node20-win-x64"
-    ],
-    "outputPath": "dist"
-  },
+  "name": "cottage-tandoori-simple-printer",
+  "version": "1.0.0",
+  "description": "Simple Node.js HTTP server for thermal printing - POSII integration ready",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
-    "build": "pkg package.json",
-    "test": "node index.js --test",
-    "install-service": "node install-service.js",
-    "uninstall-service": "node uninstall-service.js"
+    "start": "node server.js",
+    "build": "pkg server.js --target node18-win-x64 --output cottage-tandoori-printer.exe",
+    "test": "node server.js"
   },
-  "author": "Cottage Tandoori",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "pdf-lib": "^1.17.1",
-    "canvas": "^2.11.2"
+    "node-thermal-printer": "^4.4.6"
   },
   "devDependencies": {
     "pkg": "^5.8.1"
   },
-  "keywords": [
-    "windows",
-    "printing",
-    "pos",
-    "thermal",
-    "epson",
-    "receipt"
-  ]
+  "pkg": {
+    "assets": [],
+    "scripts": ["server.js"],
+    "targets": ["node18-win-x64"]
+  },
+  "keywords": ["thermal-printer", "pos", "restaurant", "epson", "http-server"],
+  "author": "Cottage Tandoori",
+  "license": "MIT"
 }
