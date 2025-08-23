@@ -1,7 +1,7 @@
 {
   "name": "cottage-tandoori-rich-printer",
   "version": "3.0.0",
-  "description": "Rich template thermal printer with ESC/POS support for ThermalReceiptDesigner",
+  "description": "Rich template thermal printer with lightweight processing for ThermalReceiptDesigner",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,20 +11,13 @@
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "sharp": "^0.32.6",
-    "canvas": "^2.11.2",
-    "qrcode": "^1.5.3",
-    "escpos": "^3.0.0-alpha.6",
-    "jimp": "^0.22.10",
-    "dithering": "^1.0.1"
+    "qrcode": "^1.5.3"
   },
   "devDependencies": {
     "pkg": "^5.8.1"
   },
   "pkg": {
-    "assets": [
-      "node_modules/canvas/build/**/*"
-    ],
+    "assets": [],
     "scripts": [
       "server.js"
     ],
@@ -38,7 +31,7 @@
     "restaurant",
     "thermal",
     "rich-templates",
-    "escpos"
+    "lightweight"
   ],
   "author": "Cottage Tandoori",
   "license": "MIT"
