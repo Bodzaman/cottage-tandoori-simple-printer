@@ -5,19 +5,44 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL || '5000');
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-console.log('🖨️  Cottage Tandoori Rich Template Printer v3.0.0');
-console.log('🎨 Lightweight rich template processing with reliable builds');
+console.log('🖨️  Cottage Tandoori Rich Template Printer v3.1.0');
+console.log('🎨 Lightweight rich template processing with Supabase polling');
 console.log('🔧 Using Windows print spooler + ESC/POS thermal commands');
 console.log(`🚀 Server starting on port ${PORT}...`);
+
+// Initialize Supabase client
+let supabase = null;
+let pollingEnabled = false;
+
+if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+    try {
+        supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY
+        );
+        pollingEnabled = true;
+        console.log('✅ Supabase client initialized successfully');
+        console.log(`🔄 Print queue polling enabled (every ${POLL_INTERVAL}ms)`);
+    } catch (error) {
+        console.error('❌ Failed to initialize Supabase client:', error.message);
+        console.log('⚠️  Polling disabled - HTTP endpoints still available');
+    }
+} else {
+    console.log('⚠️  SUPABASE_URL or SUPABASE_ANON_KEY not configured');
+    console.log('⚠️  Polling disabled - HTTP endpoints still available');
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -25,10 +50,14 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         platform: os.platform(),
-        version: '3.0.0',
+        version: '3.1.0',
         method: 'Lightweight Rich Templates + Windows Print Spooler',
         printer: 'EPSON TM-T20III',
-        features: ['rich_templates', 'qr_codes', 'lightweight', 'reliable_builds']
+        features: ['rich_templates', 'qr_codes', 'lightweight', 'reliable_builds', 'supabase_polling'],
+        polling: {
+            enabled: pollingEnabled,
+            interval: POLL_INTERVAL
+        }
     });
 });
 
@@ -368,6 +397,124 @@ function printToWindows(content, callback) {
     }
 }
 
+// ===== SUPABASE POLLING LOGIC =====
+
+// Process a single print job from Supabase
+async function processPrintJob(job) {
+    console.log(`🔄 Processing job ${job.id} (${job.job_type})`);
+
+    try {
+        // Update job status to PRINTING
+        await supabase.rpc('update_print_job_status', {
+            p_job_id: job.id,
+            p_status: 'PRINTING'
+        });
+
+        // Map job_type to print format
+        let printType = 'receipt';
+        if (job.job_type === 'KITCHEN_TICKET') {
+            printType = 'kitchen';
+        } else if (job.job_type === 'CUSTOMER_RECEIPT' || job.job_type === 'BILL') {
+            printType = 'receipt';
+        }
+
+        // Parse print_data (it's stored as JSONB)
+        const printData = typeof job.print_data === 'string' 
+            ? JSON.parse(job.print_data) 
+            : job.print_data;
+
+        // Format receipt using existing logic
+        const receiptContent = await formatReceipt(printData, printType);
+
+        if (!receiptContent) {
+            throw new Error('Failed to format receipt content');
+        }
+
+        // Print using existing Windows spooler logic
+        printToWindows(receiptContent, async (error, result) => {
+            if (error) {
+                console.error(`❌ Job ${job.id} print failed:`, error.message);
+
+                // Update job status to FAILED
+                await supabase.rpc('update_print_job_status', {
+                    p_job_id: job.id,
+                    p_status: 'FAILED',
+                    p_error_message: error.message
+                });
+            } else {
+                console.log(`✅ Job ${job.id} printed successfully`);
+
+                // Update job status to COMPLETED
+                await supabase.rpc('update_print_job_status', {
+                    p_job_id: job.id,
+                    p_status: 'COMPLETED'
+                });
+            }
+        });
+
+    } catch (error) {
+        console.error(`❌ Job ${job.id} processing error:`, error.message);
+
+        // Update job status to FAILED
+        try {
+            await supabase.rpc('update_print_job_status', {
+                p_job_id: job.id,
+                p_status: 'FAILED',
+                p_error_message: error.message
+            });
+        } catch (updateError) {
+            console.error(`❌ Failed to update job ${job.id} status:`, updateError.message);
+        }
+    }
+}
+
+// Poll Supabase for pending print jobs
+async function pollPrintQueue() {
+    if (!pollingEnabled || !supabase) {
+        return;
+    }
+
+    try {
+        // Call Supabase RPC to get pending print jobs
+        const { data: jobs, error } = await supabase.rpc('get_pending_print_jobs');
+
+        if (error) {
+            console.error('❌ Failed to fetch print jobs:', error.message);
+            return;
+        }
+
+        if (jobs && jobs.length > 0) {
+            console.log(`📥 Found ${jobs.length} pending print job(s)`);
+
+            // Process each job
+            for (const job of jobs) {
+                await processPrintJob(job);
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ Polling error:', error.message);
+    }
+}
+
+// Start polling loop
+function startPolling() {
+    if (!pollingEnabled) {
+        console.log('⚠️  Polling not started (Supabase not configured)');
+        return;
+    }
+
+    console.log(`🔄 Starting print queue polling (every ${POLL_INTERVAL}ms)...`);
+
+    // Initial poll
+    pollPrintQueue();
+
+    // Set up recurring polling
+    setInterval(pollPrintQueue, POLL_INTERVAL);
+}
+
+// ===== HTTP ENDPOINTS (Backward Compatibility) =====
+
 // Enhanced template-based printing endpoint
 app.post('/print/template', async (req, res) => {
     console.log('🎨 Rich template print request received');
@@ -498,17 +645,17 @@ app.post('/print/test', (req, res) => {
 
     const testContent = 'COTTAGE TANDOORI - RICH TEMPLATE TEST\n' +
                        '==================================\n' +
-                       'Lightweight Rich Template v3.0.0\n' +
+                       'Lightweight Rich Template v3.1.0\n' +
                        `Time: ${new Date().toLocaleString()}\n` +
                        'Printer: EPSON TM-T20III\n' +
                        'Method: Lightweight + Windows Spooler\n' +
-                       'Features: Rich Templates, QR, Reliable\n' +
+                       'Features: Rich Templates, QR, Polling\n' +
                        '==================================\n' +
                        'ThermalReceiptDesigner Integration\n' +
                        'Template Assignment System Ready\n' +
                        'ESC/POS Commands Enabled\n' +
-                       'Backward Compatibility Maintained\n' +
-                       'Build Pipeline: FIXED & WORKING\n';
+                       'Supabase Polling Active\n' +
+                       'Backward Compatibility Maintained\n';
 
     printToWindows(testContent, (error, result) => {
         if (error) {
@@ -526,8 +673,8 @@ app.post('/print/test', (req, res) => {
                 message: 'Lightweight rich template test print sent successfully',
                 method: 'Lightweight Rich Template + Windows Print Spooler',
                 printer: 'EPSON TM-T20III',
-                version: '3.0.0',
-                capabilities: ['rich_templates', 'qr_codes', 'lightweight', 'reliable_builds']
+                version: '3.1.0',
+                capabilities: ['rich_templates', 'qr_codes', 'lightweight', 'reliable_builds', 'supabase_polling']
             });
         }
     });
@@ -536,7 +683,7 @@ app.post('/print/test', (req, res) => {
 // Get system capabilities endpoint
 app.get('/capabilities', (req, res) => {
     res.json({
-        version: '3.0.0',
+        version: '3.1.0',
         name: 'Cottage Tandoori Lightweight Rich Template Printer',
         capabilities: {
             rich_templates: true,
@@ -546,7 +693,8 @@ app.get('/capabilities', (req, res) => {
             thermal_optimization: true,
             lightweight_processing: true,
             reliable_builds: true,
-            backward_compatibility: true
+            backward_compatibility: true,
+            supabase_polling: pollingEnabled
         },
         supported_formats: {
             thermal_receipt_data: true,
@@ -563,6 +711,11 @@ app.get('/capabilities', (req, res) => {
             native_dependencies: false,
             pkg_compatible: true,
             windows_ready: true
+        },
+        polling: {
+            enabled: pollingEnabled,
+            interval: POLL_INTERVAL,
+            supabase_connected: supabase !== null
         }
     });
 });
@@ -577,7 +730,14 @@ app.listen(PORT, () => {
     console.log(`🧾 Receipt: POST http://localhost:${PORT}/print/receipt`);
     console.log(`💻 Capabilities: GET http://localhost:${PORT}/capabilities`);
     console.log(`🎨 Lightweight rich template processing: QR codes, ASCII art, ESC/POS`);
-    console.log(`✅ Build pipeline: Fixed and reliable`);
+
+    if (pollingEnabled) {
+        console.log(`🔄 Supabase polling: ENABLED (${POLL_INTERVAL}ms interval)`);
+        // Start polling after server is ready
+        setTimeout(startPolling, 1000);
+    } else {
+        console.log(`⚠️  Supabase polling: DISABLED (configure .env to enable)`);
+    }
 });
 
 // Handle graceful shutdown
