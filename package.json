@@ -1,7 +1,7 @@
 {
   "name": "cottage-tandoori-rich-printer",
-  "version": "3.0.0",
-  "description": "Rich template thermal printer with lightweight processing for ThermalReceiptDesigner",
+  "version": "3.1.0",
+  "description": "Rich template thermal printer with Supabase polling for print queue management",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,27 +11,16 @@
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "qrcode": "^1.5.3"
-  },
-  "devDependencies": {
-    "pkg": "^5.8.1"
-  },
-  "pkg": {
-    "assets": [],
-    "scripts": [
-      "server.js"
-    ],
-    "targets": [
-      "node18-win-x64"
-    ]
+    "qrcode": "^1.5.3",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.3.1"
   },
   "keywords": [
-    "windows-printer",
-    "pos",
-    "restaurant",
-    "thermal",
-    "rich-templates",
-    "lightweight"
+    "thermal-printer",
+    "receipt-printer",
+    "supabase",
+    "polling",
+    "restaurant-pos"
   ],
   "author": "Cottage Tandoori",
   "license": "MIT"
